@@ -7,6 +7,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(Qt6 6.2 COMPONENTS Quick REQUIRED)
 
+# qt_policy(SET QTP0001 NEW)
+
 qt_add_executable(appMobileCameraClient
     main.cpp
 )
@@ -14,8 +16,21 @@ qt_add_executable(appMobileCameraClient
 qt_add_qml_module(appMobileCameraClient
     URI MobileCameraClient
     VERSION 1.0
-    QML_FILES main.qml
+    QML_FILES
+        main.qml
+        CameraStream.qml
     RESOURCES
+        icons/up.svg
+        icons/down.svg
+        icons/left.svg
+        icons/right.svg
+        icons/zoom_in.svg
+        icons/zoom_out.svg
+        icons/back.svg
+        icons/menu.svg
+    SOURCES
+        ptzcontroller.h
+        ptzcontroller.cpp
 )
 
 # Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.

@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Controls.Material
 import QtQuick.Layouts
+import MobileCameraClient
 
 ApplicationWindow {
     id: window
@@ -12,6 +13,10 @@ ApplicationWindow {
     Material.theme: Material.Dark
     Material.accent: Material.Blue
 
+    PtzController {
+        id: ptzController
+    }
+
     // --- Шапка ---
     header: ToolBar {
         RowLayout {
@@ -20,7 +25,7 @@ ApplicationWindow {
             // Умная кнопка (либо "гамбургер", либо кнопка "Назад")
             ToolButton {
                 // Если мы глубже 1-го экрана, показываем стрелку, иначе Гамбургер
-                text: stackView.depth > 1 ? "◀" : "☰"
+                icon.source: stackView.depth > 1 ? "icons/back.svg" : "icons/menu.svg"
                 font.pixelSize: 24
                 onClicked: {
                     if (stackView.depth > 1) {
@@ -159,22 +164,31 @@ ApplicationWindow {
                             color: Material.color(Material.BlueGrey, Material.Shade800) // Темно-серо-синий фон
                             radius: 8 // Закругленные углы
 
-                            // Место под будущее WebRTC видео (пока просто черный квадрат)
-                            Rectangle {
+                            // Видео
+                            CameraStream {
                                 anchors.top: parent.top
                                 anchors.left: parent.left
                                 anchors.right: parent.right
-                                height: parent.height * 0.75 // Видео занимает 75% высоты карточки
-                                color: "black"
-                                radius: 8
-
-                                Label {
-                                    anchors.centerIn: parent
-                                    text: "🎥\nНет сигнала"
-                                    horizontalAlignment: Text.AlignHCenter
-                                    color: "gray"
-                                }
+                                height: parent.height * 0.75
+                                cameraName: camName
+                                // streamUrl: "тут_будет_ссылка_на_low_quality"
                             }
+                            // Просто старая заглушка
+                            // Rectangle {
+                            //     anchors.top: parent.top
+                            //     anchors.left: parent.left
+                            //     anchors.right: parent.right
+                            //     height: parent.height * 0.75 // Видео занимает 75% высоты карточки
+                            //     color: "black"
+                            //     radius: 8
+
+                            //     Label {
+                            //         anchors.centerIn: parent
+                            //         text: "🎥\nНет сигнала"
+                            //         horizontalAlignment: Text.AlignHCenter
+                            //         color: "gray"
+                            //     }
+                            // }
 
                             // Название камеры внизу карточки
                             Label {
@@ -211,7 +225,7 @@ ApplicationWindow {
             }
         }
 
-    // --- Шаблону экрана управления камерой ---
+    // --- Шаблон экрана управления камерой ---
         Component {
             id: ptzComponent
 
@@ -219,19 +233,13 @@ ApplicationWindow {
                 property string currentCameraName: "Неизвестная камера"
 
                 // 1. Видеоплеер (Фон на весь экран)
-                Rectangle {
+                CameraStream {
                     id: videoPlayerArea
                     anchors.fill: parent
-                    color: "black"
+                    cameraName: currentCameraName
+                    // streamUrl: "тут_будет_ссылка_на_high_quality"
 
-                    Label {
-                        anchors.centerIn: parent
-                        text: "🎥 " + currentCameraName
-                        color: "white"
-                        horizontalAlignment: Text.AlignHCenter
-                    }
-
-                    // Эта зона ловит клики по видео, чтобы показать/скрыть интерфейс
+                    // Зона для кликов
                     MouseArea {
                         anchors.fill: parent
                         onClicked: {
@@ -244,6 +252,32 @@ ApplicationWindow {
                         }
                     }
                 }
+                // Просто старая заглушка
+                // Rectangle {
+                //     id: videoPlayerArea
+                //     anchors.fill: parent
+                //     color: "black"
+
+                //     Label {
+                //         anchors.centerIn: parent
+                //         text: "🎥 " + currentCameraName
+                //         color: "white"
+                //         horizontalAlignment: Text.AlignHCenter
+                //     }
+
+                //     // Эта зона ловит клики по видео, чтобы показать/скрыть интерфейс
+                //     MouseArea {
+                //         anchors.fill: parent
+                //         onClicked: {
+                //             if (controlsOverlay.opacity === 0.0) {
+                //                 controlsOverlay.opacity = 1.0
+                //                 uiHideTimer.restart()
+                //             } else {
+                //                 controlsOverlay.opacity = 0.0
+                //             }
+                //         }
+                //     }
+                // }
 
                 // Таймер авто-скрытия интерфейса
                 Timer {
@@ -261,96 +295,112 @@ ApplicationWindow {
 
                     Behavior on opacity { NumberAnimation { duration: 300 } }
 
-                    // --- Джойстик (слева внизу) ---
+                    // --- Джойстик ---
                     GridLayout {
                         anchors.bottom: parent.bottom
                         anchors.left: parent.left
-                        anchors.margins: 30
+                        anchors.margins: 15
                         columns: 3
                         rows: 3
-                        columnSpacing: 10
-                        rowSpacing: 10
+                        columnSpacing: 8
+                        rowSpacing: 8
 
                         component PtzButton: Button {
                             property string commandName: ""
-                            implicitWidth: 65
-                            implicitHeight: 65
-                            font.pixelSize: 24
+                            property string iconName: ""
+
+                            implicitWidth: 55
+                            implicitHeight: 55
                             opacity: 0.8
 
-                            // Пока что просто пишет логи. В будущем должна быть реальная логика с MQTT
+                            icon.source: "icons/" + iconName
+                            icon.width: 32
+                            icon.height: 32
+
                             onPressed: {
-                                uiHideTimer.restart()
-                                console.log("MQTT -> send: " + commandName + ", speed: " + speedSlider.value)
+                                uiHideTimer.stop()
+                                ptzController.sendCommand(commandName, speedSlider.value)
                             }
-                            onReleased: console.log("MQTT -> send: stop")
+                            onReleased: {
+                                uiHideTimer.restart()
+                                ptzController.sendCommand("stop", speedSlider.value)
+                            }
                         }
 
-                        Item { width: 65; height: 65 }
-                        PtzButton { text: "▲"; commandName: "up" }
-                        Item { width: 65; height: 65 }
+                        Item { width: 55; height: 55 }
+                        PtzButton { iconName: "up.svg"; commandName: "up" }
+                        Item { width: 55; height: 55 }
 
-                        PtzButton { text: "◀"; commandName: "left" }
-                        Item { width: 65; height: 65 }
-                        PtzButton { text: "▶"; commandName: "right" }
+                        PtzButton { iconName: "left.svg"; commandName: "left" }
+                        Item { width: 55; height: 55 }
+                        PtzButton { iconName: "right.svg"; commandName: "right" }
 
-                        Item { width: 65; height: 65 }
-                        PtzButton { text: "▼"; commandName: "down" }
-                        Item { width: 65; height: 65 }
+                        Item { width: 55; height: 55 }
+                        PtzButton { iconName: "down.svg"; commandName: "down" }
+                        Item { width: 55; height: 55 }
                     }
 
                     // --- Правая панель (скорость и зум) ---
                     ColumnLayout {
                         anchors.bottom: parent.bottom
                         anchors.right: parent.right
-                        anchors.margins: 30
-                        spacing: 15
+                        anchors.margins: 15
+                        spacing: 10
 
-                        // Текст скорости
                         Label {
                             Layout.alignment: Qt.AlignHCenter
-                            text: "Скорость: " + speedSlider.value.toFixed(1)
+                            text: "Скор: " + speedSlider.value.toFixed(1)
                             color: "white"
                             font.bold: true
                             style: Text.Outline; styleColor: "black"
                         }
 
-                        // Вертикальный ползунок скорости
                         Slider {
                             id: speedSlider
                             Layout.alignment: Qt.AlignHCenter
-                            Layout.preferredHeight: 140 // Высота ползунка, чтобы было удобно тянуть
-                            orientation: Qt.Vertical // Делаем его вертикальным!
-
-                            // from > to переворачивает ползунок (1.0 будет наверху, 0.0 внизу)
+                            Layout.preferredHeight: 120
+                            orientation: Qt.Vertical
                             from: 0.0
                             to: 1.0
                             value: 0.5
                             stepSize: 0.1
 
-                            onPressedChanged: if (pressed) uiHideTimer.restart()
+                            onPressedChanged: {
+                                if (pressed) uiHideTimer.stop()
+                                else uiHideTimer.restart()
+                            }
                         }
 
-                        // Кнопки зума
                         Button {
-                            text: "➕"
-                            Layout.preferredWidth: 120
-                            Layout.preferredHeight: 55
+                            icon.source: "icons/zoom_in.svg"
+                            Layout.preferredWidth: 90
+                            Layout.preferredHeight: 50
                             opacity: 0.8
 
-                            // Пока что просто пишет логи. В будущем должна быть реальная логика с MQTT
-                            onPressed: { uiHideTimer.restart(); console.log("MQTT -> send: zoom_in, speed: " + speedSlider.value) }
-                            onReleased: console.log("MQTT -> send: stop")
+                            onPressed: {
+                                uiHideTimer.stop();
+                                ptzController.sendCommand("zoom_in", speedSlider.value)
+                            }
+                            onReleased: {
+                                uiHideTimer.restart();
+                                ptzController.sendCommand("stop", speedSlider.value)
+                            }
                         }
+
                         Button {
-                            text: "➖"
-                            Layout.preferredWidth: 120
-                            Layout.preferredHeight: 55
+                            icon.source: "icons/zoom_out.svg"
+                            Layout.preferredWidth: 90
+                            Layout.preferredHeight: 50
                             opacity: 0.8
 
-                            // Пока что просто пишет логи. В будущем должна быть реальная логика с MQTT
-                            onPressed: { uiHideTimer.restart(); console.log("MQTT -> send: zoom_out, speed: " + speedSlider.value) }
-                            onReleased: console.log("MQTT -> send: stop")
+                            onPressed: {
+                                uiHideTimer.stop();
+                                ptzController.sendCommand("zoom_out", speedSlider.value)
+                            }
+                            onReleased: {
+                                uiHideTimer.restart();
+                                ptzController.sendCommand("stop", speedSlider.value)
+                            }
                         }
                     }
                 }
